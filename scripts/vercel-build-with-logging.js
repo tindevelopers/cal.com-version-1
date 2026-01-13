@@ -13,6 +13,26 @@ const SESSION_ID = `vercel-build-${Date.now()}`;
 const RUN_ID = `build-${Date.now()}`;
 const REPO_ROOT = path.resolve(__dirname, "..");
 
+// #region agent log
+function postDebug(hypothesisId, location, message, data) {
+  // NOTE: This endpoint exists only in our local debug environment.
+  // On Vercel it will fail fast and be ignored.
+  fetch("http://127.0.0.1:7247/ingest/775288a5-8379-4f47-bb7e-30dbdf7e5db9", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: "debug-session",
+      runId: RUN_ID,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 // Helper function to log JSON to file
 function logJson(message, data, hypothesisId = 'general') {
   const logEntry = {
@@ -43,6 +63,20 @@ function logJson(message, data, hypothesisId = 'general') {
 
 try {
   // Log build start
+  // #region agent log
+  postDebug("A", "scripts/vercel-build-with-logging.js:buildStart", "Build start (env summary)", {
+    VERCEL: process.env.VERCEL || "not-set",
+    VERCEL_ENV: process.env.VERCEL_ENV || "not-set",
+    VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA || "not-set",
+    VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
+    NODE_ENV: process.env.NODE_ENV || "not-set",
+    CSP_POLICY: process.env.CSP_POLICY || "not-set",
+    NODE_OPTIONS: process.env.NODE_OPTIONS || "not-set",
+    has_NEXTAUTH_SECRET: Boolean(process.env.NEXTAUTH_SECRET),
+    has_CALENDSO_ENCRYPTION_KEY: Boolean(process.env.CALENDSO_ENCRYPTION_KEY),
+  });
+  // #endregion
+
   logJson('Build started', {
     repoRoot: REPO_ROOT,
     pwd: process.cwd(),
@@ -50,6 +84,8 @@ try {
     nodeVersion: process.version,
     platform: process.platform,
     arch: process.arch,
+    vercelGitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
+    vercelGitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
   }, 'A');
 
   // Log environment variables (non-sensitive)
@@ -60,6 +96,12 @@ try {
     CI: process.env.CI || 'not-set',
     BUILD_STANDALONE: process.env.BUILD_STANDALONE || 'not-set',
     ROOT_DIRECTORY: process.env.VERCEL_ROOT_DIRECTORY || 'not-set',
+    VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
+    VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
+    CSP_POLICY: process.env.CSP_POLICY || "not-set",
+    NODE_OPTIONS: process.env.NODE_OPTIONS || "not-set",
+    has_NEXTAUTH_SECRET: Boolean(process.env.NEXTAUTH_SECRET),
+    has_CALENDSO_ENCRYPTION_KEY: Boolean(process.env.CALENDSO_ENCRYPTION_KEY),
   }, 'B');
 
   // Log filesystem state
