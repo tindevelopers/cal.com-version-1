@@ -1,5 +1,5 @@
 {
-  "buildCommand": "turbo run build --filter=@calcom/web... --no-remote-cache",
+  "buildCommand": "turbo run build --filter=@calcom/web...",
   "installCommand": "yarn install",
   "framework": "nextjs",
   "crons": [
