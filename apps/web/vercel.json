@@ -1,4 +1,7 @@
 {
+  "buildCommand": "turbo run build --filter=@calcom/web...",
+  "installCommand": "yarn install",
+  "framework": "nextjs",
   "crons": [
     {
       "path": "/api/cron/calendar-subscriptions",
@@ -41,6 +44,9 @@
     },
     "pages/api/trpc/workflows/[trpc].ts": {
       "maxDuration": 800
+    },
+    "app/api/migrations/deploy/route.ts": {
+      "maxDuration": 300
     }
   }
 }

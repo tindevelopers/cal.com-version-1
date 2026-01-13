@@ -2,6 +2,8 @@
   "$schema": "https://turborepo.org/schema.json",
   "globalDependencies": ["yarn.lock"],
   "globalEnv": [
+    "TURBO_TOKEN",
+    "TURBO_TEAM",
     "ALLOWED_HOSTNAMES",
     "ANALYZE",
     "AWAITING_PAYMENT_EMAIL_DELAY_MINUTES",
@@ -325,11 +327,21 @@
     },
     "@calcom/trpc#build": {
       "dependsOn": ["@calcom/prisma#post-install"],
-      "outputs": ["./types"]
+      "outputs": ["./types"],
+      "inputs": ["src/**/*.ts", "server/**/*.ts", "package.json"]
     },
     "@calcom/web#build": {
       "dependsOn": ["^build", "copy-app-store-static"],
       "outputs": [".next/**"],
+      "inputs": [
+        "app/**/*",
+        "pages/**/*",
+        "public/**/*",
+        "next.config.ts",
+        "next-i18next.config.ts",
+        "package.json",
+        "tsconfig.json"
+      ],
       "env": [
         "NEXT_PUBLIC_AVAILABILITY_SCHEDULE_INTERVAL",
         "NEXT_PUBLIC_BOOKER_NUMBER_OF_DAYS_TO_LOAD",
@@ -378,7 +390,8 @@
       "dependsOn": []
     },
     "@calcom/atoms#build-npm": {
-      "outputs": ["dist/**", "globals.min.css"]
+      "outputs": ["dist/**", "globals.min.css"],
+      "inputs": ["src/**/*", "package.json", "tsconfig.json"]
     },
     "@calcom/api-v2#build": {
       "dependsOn": ["^build"],
@@ -443,7 +456,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**"],
+      "inputs": ["src/**/*", "app/**/*", "pages/**/*", "package.json", "tsconfig.json"]
     },
     "db-deploy": {
       "cache": false,
@@ -492,7 +506,7 @@
     "post-install": {
       "dependsOn": [],
       "outputs": ["../../node_modules/@prisma/client/**", "../../node_modules/@prisma/admin-client/**"],
-      "inputs": ["./schema.prisma", "./prisma/schema.prisma"],
+      "inputs": ["./schema.prisma", "./prisma/schema.prisma", "package.json"],
       "env": ["PRISMA_GENERATE_DATAPROXY"]
     },
     "@calcom/prisma#post-install": {
