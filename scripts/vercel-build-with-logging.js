@@ -4,11 +4,11 @@
  * Logs key information to help debug build failures
  */
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { execSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
-const LOG_FILE = path.join(__dirname, '../.cursor/debug.log');
+const LOG_FILE = path.join(__dirname, "../.cursor/debug.log");
 const SESSION_ID = `vercel-build-${Date.now()}`;
 const RUN_ID = `build-${Date.now()}`;
 
@@ -24,14 +24,20 @@ function logJson(message, data, hypothesisId = 'general') {
     timestamp: Date.now(),
   };
   
-  // Ensure log directory exists
-  const logDir = path.dirname(LOG_FILE);
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+  // Always log to stdout so it's visible in Vercel build logs
+  // (File logging may not be available on Vercel build machines)
+  console.log(`[agent-log] ${JSON.stringify(logEntry)}`);
+
+  // Best-effort file logging (useful locally)
+  try {
+    const logDir = path.dirname(LOG_FILE);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(LOG_FILE, `${JSON.stringify(logEntry)}\n`);
+  } catch (_e) {
+    // ignore
   }
-  
-  // Append NDJSON line
-  fs.appendFileSync(LOG_FILE, JSON.stringify(logEntry) + '\n');
 }
 
 try {
