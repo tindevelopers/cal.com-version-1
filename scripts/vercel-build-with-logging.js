@@ -403,3 +403,4 @@ try {
 
   process.exit(error?.status || error?.code || 1);
 }
+})();
