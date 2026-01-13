@@ -290,6 +290,12 @@ const nextConfig = (phase: string): NextConfig => {
     // Turbopack is experimental and can cause build hangs on Vercel
     // Only enable Turbopack in development mode
     ...(process.env.NODE_ENV === "development" && process.env.USE_TURBOPACK === "1" ? { turbopack: {} } : {}),
+    // Force webpack usage in production to prevent Turbopack hangs
+    // Next.js 16.1.0 may use Turbopack by default, but webpack is more stable
+    webpack: (config) => {
+      // Ensure webpack is used instead of Turbopack
+      return config;
+    },
     async rewrites() {
       const { orgSlug } = nextJsOrgRewriteConfig;
       const beforeFiles = [
