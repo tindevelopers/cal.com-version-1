@@ -286,7 +286,10 @@ const nextConfig = (phase: string): NextConfig => {
     images: {
       unoptimized: true,
     },
-    turbopack: {},
+    // Disable Turbopack for production builds to avoid hangs
+    // Turbopack is experimental and can cause build hangs on Vercel
+    // Only enable Turbopack in development mode
+    ...(process.env.NODE_ENV === "development" && process.env.USE_TURBOPACK === "1" ? { turbopack: {} } : {}),
     async rewrites() {
       const { orgSlug } = nextJsOrgRewriteConfig;
       const beforeFiles = [

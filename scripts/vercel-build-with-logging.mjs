@@ -284,6 +284,16 @@ try {
           },
           "H5"
         );
+        // Don't kill the process automatically - let Vercel handle timeouts
+        // But log a warning that might help diagnose the issue
+        console.error(
+          "\n⚠️  WARNING: Build appears stuck - no output for 5+ minutes.\n" +
+          "This may be caused by:\n" +
+          "1. Turbopack hanging (try disabling it)\n" +
+          "2. Memory issues (check NODE_OPTIONS)\n" +
+          "3. Large bundle compilation taking too long\n" +
+          "4. Circular dependencies or infinite loops\n"
+        );
       }
     }, HEARTBEAT_INTERVAL_MS);
 
