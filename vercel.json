@@ -1,0 +1,7 @@
+{
+  "buildCommand": "node scripts/vercel-build-with-logging.mjs",
+  "installCommand": "yarn install",
+  "framework": "nextjs",
+  "outputDirectory": "apps/web/.next"
+}
+
