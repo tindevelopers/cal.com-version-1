@@ -1,4 +1,3 @@
-import process from "node:process";
 import * as Sentry from "@sentry/nextjs";
 import type { Instrumentation } from "next";
 
@@ -7,7 +6,8 @@ export async function register(): Promise<void> {
   // This warning is caused by Next.js 16.1.0/Turbopack using React 19 internally
   // while the app uses React 18.2.0. It's a deprecation warning, not an error.
   // TODO: Remove this when dependencies are updated for React 19 compatibility
-  if (process.env.NODE_ENV === "development") {
+  // Use global process object (available in both Node.js and Edge runtime)
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "development") {
     const originalWarn = console.warn;
     const originalError = console.error;
 
@@ -49,7 +49,7 @@ export async function register(): Promise<void> {
     };
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
     if (process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NEXT_RUNTIME === "nodejs") {
       await import("./sentry.server.config");
     }
@@ -64,7 +64,7 @@ export const onRequestError: Instrumentation.onRequestError = (
   request: Request,
   context: { [key: string]: unknown }
 ) => {
-  if (process.env.NODE_ENV === "production") {
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
     Sentry.captureRequestError(err, request, context);
   }
 };

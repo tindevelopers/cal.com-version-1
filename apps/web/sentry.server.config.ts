@@ -6,13 +6,22 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 import * as Sentry from "@sentry/nextjs";
 
+// Build integrations array conditionally - these integrations are only available in Node.js runtime
+const integrations = [];
+if (typeof Sentry.prismaIntegration === "function") {
+  integrations.push(Sentry.prismaIntegration());
+}
+if (typeof Sentry.httpIntegration === "function") {
+  integrations.push(Sentry.httpIntegration());
+}
+
 Sentry.init({
   debug: !!process.env.SENTRY_DEBUG,
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   sampleRate: parseFloat(process.env.SENTRY_SAMPLE_RATE ?? "1.0") || 1.0,
   tracesSampleRate:
     parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE ?? "0.0") || 0.0,
-  integrations: [Sentry.prismaIntegration(), Sentry.httpIntegration()],
+  integrations,
   beforeSend(event) {
     event.tags = {
       ...event.tags,

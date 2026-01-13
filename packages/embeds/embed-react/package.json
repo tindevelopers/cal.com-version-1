@@ -1,5 +1,6 @@
 {
   "name": "@calcom/embed-react",
+  "type": "module",
   "sideEffects": false,
   "version": "1.5.3",
   "description": "Embed Cal Link as a React Component",
