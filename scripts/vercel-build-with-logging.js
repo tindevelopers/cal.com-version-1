@@ -5,7 +5,7 @@
  */
 
 import process from "node:process";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,7 @@ function logJson(message, data, hypothesisId = "general") {
   }
 }
 
+(async () => {
 try {
   // Log build start
   // #region agent log
@@ -239,24 +240,142 @@ try {
   );
   // #endregion
 
-  // Execute the actual build command
+  // Execute the actual build command with output capture and heartbeat
   console.log("Executing:", buildCommand);
-  execSync(buildCommand, {
-    stdio: "inherit",
-    cwd: REPO_ROOT,
-  });
+  
+  let lastOutputTime = Date.now();
+  let lastHeartbeatTime = Date.now();
+  const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
+  const STUCK_THRESHOLD_MS = 300000; // 5 minutes
+  let outputBuffer = "";
+  let lastOutputLine = "";
+  
+  await new Promise((resolve, reject) => {
+    const child = spawn(buildCommand, {
+      cwd: REPO_ROOT,
+      stdio: ["inherit", "pipe", "pipe"],
+      shell: true,
+    });
 
-  const turboDurationMs = turboStartTime ? Date.now() - turboStartTime : null;
-  // #region agent log
-  logJson(
-    "Turbo build end",
-    {
-      durationMs: turboDurationMs,
-      exitCode: 0,
-    },
-    "H3"
-  );
-  // #endregion
+    // Heartbeat timer to detect if build is stuck
+    const heartbeatInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastOutput = now - lastOutputTime;
+      const timeSinceStart = now - turboStartTime;
+      
+      logJson(
+        "Build heartbeat",
+        {
+          timeSinceStartMs: timeSinceStart,
+          timeSinceLastOutputMs: timeSinceLastOutput,
+          lastOutputLine: lastOutputLine.substring(0, 200), // Truncate long lines
+          isStuck: timeSinceLastOutput > STUCK_THRESHOLD_MS,
+        },
+        "H4"
+      );
+      
+      if (timeSinceLastOutput > STUCK_THRESHOLD_MS) {
+        logJson(
+          "Build appears stuck - no output for 5+ minutes",
+          {
+            timeSinceStartMs: timeSinceStart,
+            timeSinceLastOutputMs: timeSinceLastOutput,
+            lastOutputLine,
+          },
+          "H5"
+        );
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    // Capture stdout
+    child.stdout.on("data", (data) => {
+      const output = data.toString();
+      outputBuffer += output;
+      lastOutputTime = Date.now();
+      
+      // Extract last line for logging
+      const lines = output.split("\n").filter((l) => l.trim());
+      if (lines.length > 0) {
+        lastOutputLine = lines[lines.length - 1];
+      }
+      
+      // Log every 100 lines or every 2 minutes
+      const linesCount = outputBuffer.split("\n").length;
+      if (linesCount % 100 === 0 || Date.now() - lastHeartbeatTime > 120000) {
+        logJson(
+          "Build output progress",
+          {
+            totalLines: linesCount,
+            lastOutputLine: lastOutputLine.substring(0, 200),
+            timeSinceStartMs: Date.now() - turboStartTime,
+          },
+          "H6"
+        );
+        lastHeartbeatTime = Date.now();
+      }
+      
+      // Forward to console
+      process.stdout.write(output);
+    });
+
+    // Capture stderr
+    child.stderr.on("data", (data) => {
+      const output = data.toString();
+      outputBuffer += output;
+      lastOutputTime = Date.now();
+      
+      logJson(
+        "Build stderr output",
+        {
+          output: output.substring(0, 500),
+          timeSinceStartMs: Date.now() - turboStartTime,
+        },
+        "H7"
+      );
+      
+      // Forward to console
+      process.stderr.write(output);
+    });
+
+    child.on("close", (code) => {
+      clearInterval(heartbeatInterval);
+      const turboDurationMs = turboStartTime ? Date.now() - turboStartTime : null;
+      
+      logJson(
+        "Turbo build end",
+        {
+          durationMs: turboDurationMs,
+          exitCode: code,
+          totalOutputLines: outputBuffer.split("\n").length,
+          lastOutputLine: lastOutputLine.substring(0, 200),
+        },
+        "H3"
+      );
+      
+      if (code === 0) {
+        resolve(code);
+      } else {
+        reject(new Error(`Build failed with exit code ${code}`));
+      }
+    });
+
+    child.on("error", (error) => {
+      clearInterval(heartbeatInterval);
+      const turboDurationMs = turboStartTime ? Date.now() - turboStartTime : null;
+      
+      logJson(
+        "Turbo build error",
+        {
+          durationMs: turboDurationMs,
+          error: error?.message || String(error),
+          stack: error?.stack,
+        },
+        "H8"
+      );
+      
+      reject(error);
+    });
+  });
 
   // Log success
   logJson(
@@ -274,13 +393,13 @@ try {
   logJson(
     "Build failed",
     {
-      exitCode: error.status || 1,
-      error: error.message,
-      stack: error.stack,
+      exitCode: error?.status || error?.code || 1,
+      error: error?.message || String(error),
+      stack: error?.stack,
       durationMs: turboDurationMs,
     },
     "G"
   );
 
-  process.exit(error.status || 1);
+  process.exit(error?.status || error?.code || 1);
 }
