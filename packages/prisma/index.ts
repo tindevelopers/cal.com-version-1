@@ -24,8 +24,12 @@ const prismaOptions: Prisma.PrismaClientOptions = {
 
 const globalForPrisma = global as unknown as {
   baseClient: PrismaClient;
+  debugListenersAttached?: boolean;
 };
 const loggerLevel = parseInt(process.env.NEXT_PUBLIC_LOGGER_LEVEL ?? "", 10);
+const prismaDebugEnabled =
+  process.env.PRISMA_DEBUG === "1" || process.env.PRISMA_DEBUG?.toLowerCase() === "true";
+const prismaSlowQueryMs = Number.parseInt(process.env.PRISMA_SLOW_QUERY_MS ?? "200", 10);
 
 if (!isNaN(loggerLevel)) {
   switch (loggerLevel) {
@@ -45,7 +49,38 @@ if (!isNaN(loggerLevel)) {
       break;
   }
 }
+
+if (prismaDebugEnabled) {
+  prismaOptions.log = [
+    { emit: "event", level: "query" },
+    { emit: "event", level: "warn" },
+    { emit: "event", level: "error" },
+  ];
+}
 const baseClient = globalForPrisma.baseClient || new PrismaClient(prismaOptions);
+
+function attachPrismaDebugListeners(client: PrismaClient) {
+  if (!prismaDebugEnabled) return;
+  if (globalForPrisma.debugListenersAttached) return;
+
+  const slowMs = Number.isFinite(prismaSlowQueryMs) ? prismaSlowQueryMs : 200;
+
+  client.$on("query", (event) => {
+    if (event.duration < slowMs) return;
+    // Avoid logging params (may contain secrets). Query text alone is usually enough to spot hangs.
+    console.warn(`[prisma:query] ${event.duration}ms ${event.query.slice(0, 500)}`);
+  });
+  client.$on("warn", (event) => {
+    console.warn("[prisma:warn]", event.message);
+  });
+  client.$on("error", (event) => {
+    console.error("[prisma:error]", event.message);
+  });
+
+  globalForPrisma.debugListenersAttached = true;
+}
+
+attachPrismaDebugListeners(baseClient);
 
 export const customPrisma = (options?: Prisma.PrismaClientOptions) => {
   let finalOptions = { ...prismaOptions };
@@ -64,7 +99,10 @@ export const customPrisma = (options?: Prisma.PrismaClientOptions) => {
     finalOptions = { ...prismaOptions, ...options };
   }
 
-  return new PrismaClient(finalOptions)
+  const client = new PrismaClient(finalOptions);
+  attachPrismaDebugListeners(client);
+
+  return client
     .$extends(excludeLockedUsersExtension())
     .$extends(excludePendingPaymentsExtension())
     .$extends(bookingIdempotencyKeyExtension())

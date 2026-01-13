@@ -1,8 +1,4 @@
-import { LRUCache } from "lru-cache";
-import type { GetServerSidePropsContext, NextApiRequest } from "next";
-import type { AuthOptions, Session } from "next-auth";
-import { getToken } from "next-auth/jwt";
-
+import process from "node:process";
 import { LicenseKeySingleton } from "@calcom/ee/common/server/LicenseKeyService";
 import { DeploymentRepository } from "@calcom/features/ee/deployment/repositories/DeploymentRepository";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
@@ -10,6 +6,10 @@ import { getUserAvatarUrl } from "@calcom/lib/getAvatarUrl";
 import logger from "@calcom/lib/logger";
 import { safeStringify } from "@calcom/lib/safeStringify";
 import prisma from "@calcom/prisma";
+import { LRUCache } from "lru-cache";
+import type { GetServerSidePropsContext, NextApiRequest } from "next";
+import type { AuthOptions, Session } from "next-auth";
+import { getToken } from "next-auth/jwt";
 
 const log = logger.getSubLogger({ prefix: ["getServerSession"] });
 /**
@@ -35,10 +35,46 @@ export async function getServerSession(options: {
 }) {
   const { req, authOptions: { secret } = {} } = options;
 
-  const token = await getToken({
-    req,
-    secret,
-  });
+  // Ensure we have a secret - fallback to env var if not provided in authOptions
+  const tokenSecret = secret || process.env.NEXTAUTH_SECRET;
+
+  if (!tokenSecret) {
+    log.warn("NEXTAUTH_SECRET is not set. Session authentication may fail.");
+  }
+
+  let token: Awaited<ReturnType<typeof getToken>>;
+  try {
+    token = await getToken({
+      req,
+      secret: tokenSecret,
+    });
+  } catch (error) {
+    // Handle fetch errors gracefully - this can happen if NEXTAUTH_URL is misconfigured
+    // or if the server can't reach itself during SSR. Log the error but don't crash.
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (
+        errorMessage.includes("fetch failed") ||
+        errorMessage.includes("networkerror") ||
+        errorMessage.includes("econnrefused") ||
+        errorMessage.includes("timeout")
+      ) {
+        log.warn(
+          "Failed to fetch session token during SSR. This may indicate NEXTAUTH_URL is misconfigured or the server can't reach itself.",
+          {
+            error: error.message,
+            hasSecret: !!tokenSecret,
+            nextAuthUrl: process.env.NEXTAUTH_URL,
+          }
+        );
+        // Return null to allow the page to render without session
+        // Next.js will handle client-side rendering if needed
+        return null;
+      }
+    }
+    // Re-throw other errors
+    throw error;
+  }
 
   log.debug("Getting server session", safeStringify({ token }));
 
@@ -54,7 +90,10 @@ export async function getServerSession(options: {
     return cachedSession;
   }
 
-  const userId = token.sub ? Number(token.sub) : null;
+  let userId: number | null = null;
+  if (token.sub) {
+    userId = Number(token.sub);
+  }
 
   if (!userId || userId <= 0) {
     log.warn("Invalid or missing user ID in token", { sub: token.sub });
@@ -93,7 +132,10 @@ export async function getServerSession(options: {
 
   const session: Session = {
     hasValidLicense,
-    expires: new Date(typeof token.exp === "number" ? token.exp * 1000 : Date.now()).toISOString(),
+    expires: (() => {
+      const exp = typeof token.exp === "number" ? token.exp * 1000 : Date.now();
+      return new Date(exp).toISOString();
+    })(),
     user: {
       id: user.id,
       uuid: user.uuid,

@@ -1,14 +1,13 @@
-import { jwtVerify } from "jose";
-import type { GetServerSidePropsContext } from "next";
-import { getCsrfToken } from "next-auth/react";
-
+import process from "node:process";
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
 import { isSAMLLoginEnabled, samlProductID, samlTenantID } from "@calcom/features/ee/sso/lib/saml";
 import { WEBSITE_URL } from "@calcom/lib/constants";
 import { getSafeRedirectUrl } from "@calcom/lib/getSafeRedirectUrl";
 import prisma from "@calcom/prisma";
-
 import { IS_GOOGLE_LOGIN_ENABLED } from "@server/lib/constants";
+import { jwtVerify } from "jose";
+import type { GetServerSidePropsContext } from "next";
+import { getCsrfToken } from "next-auth/react";
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const { req, query } = context;
@@ -86,9 +85,25 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       },
     };
   }
+  // Handle CSRF token fetch gracefully - it may fail during SSR if server can't reach itself
+  let csrfToken: string | undefined;
+  try {
+    csrfToken = await getCsrfToken(context);
+  } catch (error) {
+    // Log but don't fail - CSRF token will be fetched client-side if needed
+    let errorMessage: string;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else {
+      errorMessage = String(error);
+    }
+    console.warn("Failed to fetch CSRF token during SSR:", errorMessage);
+    csrfToken = undefined;
+  }
+
   return {
     props: {
-      csrfToken: await getCsrfToken(context),
+      csrfToken,
       isGoogleLoginEnabled: IS_GOOGLE_LOGIN_ENABLED,
       isSAMLLoginEnabled,
       samlTenantID,

@@ -115,6 +115,82 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
       data-nextjs-router="app">
       <head nonce={nonce}>
+        {/* Suppress React 19 element.ref deprecation warning - must run before React initializes */}
+        {process.env.NODE_ENV === "development" && (
+          <script
+            nonce={nonce}
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  if (typeof window === 'undefined') return;
+                  
+                  // Store original console methods immediately
+                  const originalWarn = console.warn.bind(console);
+                  const originalError = console.error.bind(console);
+                  const originalLog = console.log.bind(console);
+                  
+                  const suppressReact19RefWarning = function(args) {
+                    try {
+                      const messageStr = Array.from(args).map(arg => 
+                        typeof arg === 'string' ? arg : 
+                        typeof arg === 'object' && arg !== null ? JSON.stringify(arg) : 
+                        String(arg)
+                      ).join(' ');
+                      
+                      return (
+                        messageStr.includes('Accessing element.ref was removed in React 19') ||
+                        messageStr.includes('ref is now a regular prop') ||
+                        messageStr.includes('It will be removed from the JSX Element type') ||
+                        messageStr.includes('element.ref was removed') ||
+                        messageStr.includes('elementRefGetterWithDeprecationWarning') ||
+                        messageStr.includes('element.ref')
+                      );
+                    } catch (e) {
+                      return false;
+                    }
+                  };
+                  
+                  // Override console methods
+                  console.warn = function() {
+                    if (!suppressReact19RefWarning(arguments)) {
+                      originalWarn.apply(console, arguments);
+                    }
+                  };
+                  
+                  console.error = function() {
+                    if (!suppressReact19RefWarning(arguments)) {
+                      originalError.apply(console, arguments);
+                    }
+                  };
+                  
+                  console.log = function() {
+                    if (!suppressReact19RefWarning(arguments)) {
+                      originalLog.apply(console, arguments);
+                    }
+                  };
+                  
+                  // Also try to intercept React's internal error handling
+                  if (window.React && window.React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED) {
+                    const internals = window.React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+                    if (internals.ReactDebugCurrentFrame) {
+                      const originalGetCurrentStack = internals.ReactDebugCurrentFrame.getCurrentStack;
+                      if (originalGetCurrentStack) {
+                        internals.ReactDebugCurrentFrame.getCurrentStack = function() {
+                          try {
+                            return originalGetCurrentStack.apply(this, arguments);
+                          } catch (e) {
+                            if (String(e).includes('element.ref')) return '';
+                            throw e;
+                          }
+                        };
+                      }
+                    }
+                  }
+                })();
+              `,
+            }}
+          />
+        )}
         <style>{`
           :root {
             --font-sans: ${interFont.style.fontFamily.replace(/\'/g, "")};

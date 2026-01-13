@@ -125,8 +125,40 @@ export const API_NAME_LENGTH_MAX_LIMIT = 80;
 export const MINUTES_TO_BOOK = process.env.NEXT_PUBLIC_MINUTES_TO_BOOK || "5";
 export const ENABLE_PROFILE_SWITCHER = process.env.NEXT_PUBLIC_ENABLE_PROFILE_SWITCHER === "1";
 // Needed for orgs
-export const ALLOWED_HOSTNAMES = JSON.parse(`[${process.env.ALLOWED_HOSTNAMES || ""}]`) as string[];
-export const RESERVED_SUBDOMAINS = JSON.parse(`[${process.env.RESERVED_SUBDOMAINS || ""}]`) as string[];
+function parseStringListEnv(value: string | undefined): string[] {
+  if (!value) return [];
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  // Support JSON array format: ["cal.com","cal.dev"]
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) return parsed;
+    } catch {
+      // Fall through to other parsing strategies
+    }
+  }
+
+  // Support historical/expected format used by current docs:
+  // ALLOWED_HOSTNAMES="cal.com,cal.dev" -> ["cal.com","cal.dev"]
+  // Also supports the old JSON-fragment format: '"cal.com","cal.dev"'
+  try {
+    const parsed = JSON.parse(`[${trimmed}]`) as unknown;
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) return parsed;
+  } catch {
+    // Fall back to comma-separated parsing
+  }
+
+  return trimmed
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/^['"]|['"]$/g, ""));
+}
+
+export const ALLOWED_HOSTNAMES = parseStringListEnv(process.env.ALLOWED_HOSTNAMES);
+export const RESERVED_SUBDOMAINS = parseStringListEnv(process.env.RESERVED_SUBDOMAINS);
 
 export const ORGANIZATION_SELF_SERVE_PRICE = parseFloat(
   process.env.NEXT_PUBLIC_ORGANIZATIONS_SELF_SERVE_PRICE_NEW || "37"

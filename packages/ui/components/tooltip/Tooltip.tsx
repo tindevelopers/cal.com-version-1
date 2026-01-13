@@ -1,9 +1,8 @@
 "use client";
 
+import classNames from "@calcom/ui/classNames";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import React from "react";
-
-import classNames from "@calcom/ui/classNames";
 
 export function Tooltip({
   children,
@@ -22,7 +21,7 @@ export function Tooltip({
   defaultOpen?: boolean;
   side?: "top" | "right" | "bottom" | "left";
   onOpenChange?: (open: boolean) => void;
-} & TooltipPrimitive.TooltipContentProps) {
+} & TooltipPrimitive.TooltipContentProps): React.JSX.Element {
   const Content = (
     <TooltipPrimitive.Content
       {...props}
@@ -40,13 +39,23 @@ export function Tooltip({
     </TooltipPrimitive.Content>
   );
 
+  // Ensure children is a single React element for React 19 compatibility
+  // Radix UI's asChild prop uses cloneElement internally, which accesses element.ref
+  // In React 19, ref is now a regular prop, so we need to ensure proper ref forwarding
+  let childElement: React.ReactElement;
+  if (React.isValidElement(children)) {
+    childElement = children;
+  } else {
+    childElement = <span>{children}</span>;
+  }
+
   return (
     <TooltipPrimitive.Root
       delayDuration={delayDuration || 50}
       open={open}
       defaultOpen={defaultOpen}
       onOpenChange={onOpenChange}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Trigger asChild>{childElement}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>{Content}</TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
   );

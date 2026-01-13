@@ -1,8 +1,55 @@
 // This file configures the initialization of Sentry on the client.
 // The added config here will be used whenever a users loads a page in their browser.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
+
+import process from "node:process";
 import * as Sentry from "@sentry/nextjs";
 import { initBotId } from "botid/client/core";
+
+// Suppress React 19 element.ref deprecation warning in development (client-side)
+// This warning is caused by Next.js 16.1.0/Turbopack using React 19 internally
+// while the app uses React 18.2.0. It's a deprecation warning, not an error.
+// TODO: Remove this when dependencies are updated for React 19 compatibility
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+  const originalWarn = console.warn;
+  const originalError = console.error;
+
+  const suppressReact19RefWarning = (args: unknown[]): boolean => {
+    // Check all arguments, not just the first one
+    for (const arg of args) {
+      let message: string;
+      if (typeof arg === "string") {
+        message = arg;
+      } else {
+        message = String(arg);
+      }
+      if (
+        message.includes("Accessing element.ref was removed in React 19") ||
+        message.includes("ref is now a regular prop") ||
+        message.includes("It will be removed from the JSX Element type") ||
+        message.includes("element.ref was removed") ||
+        message.includes("elementRefGetterWithDeprecationWarning")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  console.warn = (...args: unknown[]): void => {
+    if (suppressReact19RefWarning(args)) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+
+  console.error = (...args: unknown[]): void => {
+    if (suppressReact19RefWarning(args)) {
+      return;
+    }
+    originalError.apply(console, args);
+  };
+}
 
 if (process.env.NODE_ENV === "production") {
   Sentry.init({
@@ -22,7 +69,7 @@ if (process.env.NODE_ENV === "production") {
 
     // Setting this option to true will print useful information to the console while you're setting up Sentry.
     debug: !!process.env.SENTRY_DEBUG,
-    beforeSend(event) {
+    beforeSend(event): Sentry.Event | null {
       if (
         event.exception?.values?.some(
           (e) =>
@@ -44,11 +91,13 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-export function onRouterTransitionStart(url: string, navigationType: "push" | "replace" | "traverse") {
+function onRouterTransitionStart(url: string, navigationType: "push" | "replace" | "traverse"): void {
   if (process.env.NODE_ENV === "production") {
     Sentry.captureRouterTransitionStart(url, navigationType);
   }
 }
+
+export { onRouterTransitionStart };
 
 if (
   process.env.NEXT_PUBLIC_VERCEL_USE_BOTID_IN_BOOKER === "1" &&

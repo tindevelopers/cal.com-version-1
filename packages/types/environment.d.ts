@@ -71,5 +71,25 @@ declare namespace NodeJS {
      *  "non-strict" -> Strict CSP except the usage of unsafe-inline for `style-src`
      */
     readonly CSP_POLICY: "strict" | "non-strict";
+
+    // Organizations / multi-tenant
+    readonly ORGANIZATIONS_ENABLED: "1" | "true" | "0" | "false" | undefined;
+    readonly ORGANIZATIONS_AUTOLINK: "1" | "true" | "0" | "false" | undefined;
+    readonly NEXT_PUBLIC_SINGLE_ORG_SLUG: string | undefined;
+    readonly NEXTAUTH_COOKIE_DOMAIN: string | undefined;
+    /**
+     * Allowed hostnames for org subdomains.
+     * Supported formats:
+     * - Comma-separated: cal.com,cal.dev
+     * - JSON array: ["cal.com","cal.dev"]
+     */
+    readonly ALLOWED_HOSTNAMES: string | undefined;
+    /**
+     * Reserved org slugs (subdomains) that cannot be used.
+     * Supported formats:
+     * - Comma-separated: app,auth,help
+     * - JSON array: ["app","auth","help"]
+     */
+    readonly RESERVED_SUBDOMAINS: string | undefined;
   }
 }
