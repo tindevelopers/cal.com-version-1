@@ -111,8 +111,6 @@ If you prefer not to use the CLI:
 
 3. **Add to Vercel Environment Variables** (same as Option A, step 4)
 
-**📖 Detailed instructions**: See `TURBO_CACHE_SETUP.md` or `GET_TURBO_CREDENTIALS_VIA_CLI.md`
-
 #### Verify Variables Are Set:
 
 After adding, verify they appear in the environment variables list for all three environments (Production, Preview, Development).
