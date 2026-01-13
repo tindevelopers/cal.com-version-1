@@ -11,6 +11,7 @@ const path = require("node:path");
 const LOG_FILE = path.join(__dirname, "../.cursor/debug.log");
 const SESSION_ID = `vercel-build-${Date.now()}`;
 const RUN_ID = `build-${Date.now()}`;
+const REPO_ROOT = path.resolve(__dirname, "..");
 
 // Helper function to log JSON to file
 function logJson(message, data, hypothesisId = 'general') {
@@ -43,6 +44,7 @@ function logJson(message, data, hypothesisId = 'general') {
 try {
   // Log build start
   logJson('Build started', {
+    repoRoot: REPO_ROOT,
     pwd: process.cwd(),
     user: process.env.USER || process.env.USERNAME || 'unknown',
     nodeVersion: process.version,
@@ -61,17 +63,18 @@ try {
   }, 'B');
 
   // Log filesystem state
-  const rootExists = fs.existsSync(path.join(process.cwd(), 'package.json'));
-  const turboJsonExists = fs.existsSync(path.join(process.cwd(), 'turbo.json'));
-  const appsWebExists = fs.existsSync(path.join(process.cwd(), 'apps/web'));
-  const packagesExists = fs.existsSync(path.join(process.cwd(), 'packages'));
+  const rootPackageJsonExists = fs.existsSync(path.join(REPO_ROOT, "package.json"));
+  const turboJsonExists = fs.existsSync(path.join(REPO_ROOT, "turbo.json"));
+  const appsWebExists = fs.existsSync(path.join(REPO_ROOT, "apps/web"));
+  const packagesExists = fs.existsSync(path.join(REPO_ROOT, "packages"));
 
   logJson('Filesystem check', {
-    rootExists,
+    rootPackageJsonExists,
     turboJsonExists,
     appsWebExists,
     packagesExists,
     workingDir: process.cwd(),
+    repoRoot: REPO_ROOT,
   }, 'C');
 
   // Get yarn and turbo versions
@@ -98,13 +101,14 @@ try {
   logJson('Before turbo build', {
     command: buildCommand,
     workingDir: process.cwd(),
+    repoRoot: REPO_ROOT,
   }, 'E');
 
   // Execute the actual build command
   console.log('Executing:', buildCommand);
   execSync(buildCommand, {
     stdio: 'inherit',
-    cwd: process.cwd(),
+    cwd: REPO_ROOT,
   });
 
   // Log success
