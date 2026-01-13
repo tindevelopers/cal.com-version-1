@@ -4,6 +4,7 @@
  * Logs key information to help debug build failures
  */
 
+import process from "node:process";
 const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,6 +13,8 @@ const LOG_FILE = path.join(__dirname, "../.cursor/debug.log");
 const SESSION_ID = `vercel-build-${Date.now()}`;
 const RUN_ID = `build-${Date.now()}`;
 const REPO_ROOT = path.resolve(__dirname, "..");
+
+let turboStartTime = null;
 
 // #region agent log
 function postDebug(hypothesisId, location, message, data) {
@@ -34,17 +37,17 @@ function postDebug(hypothesisId, location, message, data) {
 // #endregion
 
 // Helper function to log JSON to file
-function logJson(message, data, hypothesisId = 'general') {
+function logJson(message, data, hypothesisId = "general") {
   const logEntry = {
     sessionId: SESSION_ID,
     runId: RUN_ID,
     hypothesisId,
-    location: `vercel-build.js:${new Error().stack.split('\n')[1]?.trim() || 'unknown'}`,
+    location: `vercel-build.js:${new Error().stack.split("\n")[1]?.trim() || "unknown"}`,
     message,
-    data: typeof data === 'string' ? JSON.parse(data) : data,
+    data: typeof data === "string" ? JSON.parse(data) : data,
     timestamp: Date.now(),
   };
-  
+
   // Always log to stdout so it's visible in Vercel build logs
   // (File logging may not be available on Vercel build machines)
   console.log(`[agent-log] ${JSON.stringify(logEntry)}`);
@@ -77,32 +80,40 @@ try {
   });
   // #endregion
 
-  logJson('Build started', {
-    repoRoot: REPO_ROOT,
-    pwd: process.cwd(),
-    user: process.env.USER || process.env.USERNAME || 'unknown',
-    nodeVersion: process.version,
-    platform: process.platform,
-    arch: process.arch,
-    vercelGitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
-    vercelGitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
-  }, 'A');
+  logJson(
+    "Build started",
+    {
+      repoRoot: REPO_ROOT,
+      pwd: process.cwd(),
+      user: process.env.USER || process.env.USERNAME || "unknown",
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      vercelGitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
+      vercelGitCommitRef: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
+    },
+    "A"
+  );
 
   // Log environment variables (non-sensitive)
-  logJson('Environment check', {
-    VERCEL: process.env.VERCEL || 'not-set',
-    VERCEL_ENV: process.env.VERCEL_ENV || 'not-set',
-    NODE_ENV: process.env.NODE_ENV || 'not-set',
-    CI: process.env.CI || 'not-set',
-    BUILD_STANDALONE: process.env.BUILD_STANDALONE || 'not-set',
-    ROOT_DIRECTORY: process.env.VERCEL_ROOT_DIRECTORY || 'not-set',
-    VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
-    VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
-    CSP_POLICY: process.env.CSP_POLICY || "not-set",
-    NODE_OPTIONS: process.env.NODE_OPTIONS || "not-set",
-    has_NEXTAUTH_SECRET: Boolean(process.env.NEXTAUTH_SECRET),
-    has_CALENDSO_ENCRYPTION_KEY: Boolean(process.env.CALENDSO_ENCRYPTION_KEY),
-  }, 'B');
+  logJson(
+    "Environment check",
+    {
+      VERCEL: process.env.VERCEL || "not-set",
+      VERCEL_ENV: process.env.VERCEL_ENV || "not-set",
+      NODE_ENV: process.env.NODE_ENV || "not-set",
+      CI: process.env.CI || "not-set",
+      BUILD_STANDALONE: process.env.BUILD_STANDALONE || "not-set",
+      ROOT_DIRECTORY: process.env.VERCEL_ROOT_DIRECTORY || "not-set",
+      VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ? "set" : "not-set",
+      VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF || "not-set",
+      CSP_POLICY: process.env.CSP_POLICY || "not-set",
+      NODE_OPTIONS: process.env.NODE_OPTIONS || "not-set",
+      has_NEXTAUTH_SECRET: Boolean(process.env.NEXTAUTH_SECRET),
+      has_CALENDSO_ENCRYPTION_KEY: Boolean(process.env.CALENDSO_ENCRYPTION_KEY),
+    },
+    "B"
+  );
 
   // Log filesystem state
   const rootPackageJsonExists = fs.existsSync(path.join(REPO_ROOT, "package.json"));
@@ -110,62 +121,162 @@ try {
   const appsWebExists = fs.existsSync(path.join(REPO_ROOT, "apps/web"));
   const packagesExists = fs.existsSync(path.join(REPO_ROOT, "packages"));
 
-  logJson('Filesystem check', {
-    rootPackageJsonExists,
-    turboJsonExists,
-    appsWebExists,
-    packagesExists,
-    workingDir: process.cwd(),
-    repoRoot: REPO_ROOT,
-  }, 'C');
+  logJson(
+    "Filesystem check",
+    {
+      rootPackageJsonExists,
+      turboJsonExists,
+      appsWebExists,
+      packagesExists,
+      workingDir: process.cwd(),
+      repoRoot: REPO_ROOT,
+    },
+    "C"
+  );
+
+  // Capture package manager + Next.js version + Yarn linker
+  let packageManager = "unknown";
+  let nodeLinker = "unknown";
+  let nextVersion = "unknown";
+  try {
+    const rootPkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+    packageManager = rootPkg.packageManager || "missing";
+  } catch (_e) {
+    packageManager = "read-error";
+  }
+
+  try {
+    const yarnrc = fs.readFileSync(path.join(REPO_ROOT, ".yarnrc.yml"), "utf8");
+    const matcher = yarnrc.match(/nodeLinker:\s*([^\s#]+)/);
+    nodeLinker = matcher?.[1] || "not-found";
+  } catch (_e) {
+    nodeLinker = "read-error";
+  }
+
+  try {
+    const webPkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "apps/web/package.json"), "utf8"));
+    nextVersion = webPkg.dependencies?.next || webPkg.devDependencies?.next || "missing";
+  } catch (_e) {
+    nextVersion = "read-error";
+  }
+
+  // #region agent log
+  logJson(
+    "Package tooling snapshot",
+    {
+      packageManager,
+      nodeLinker,
+      nextVersion,
+    },
+    "H1"
+  );
+  // #endregion
+
+  // Presence-only (no values) for critical envs
+  // #region agent log
+  logJson(
+    "Env presence snapshot",
+    {
+      has_DATABASE_URL: Boolean(process.env.DATABASE_URL),
+      has_DATABASE_DIRECT_URL: Boolean(process.env.DATABASE_DIRECT_URL),
+      has_SHADOW_DATABASE_URL: Boolean(process.env.SHADOW_DATABASE_URL),
+      has_NEXTAUTH_URL: Boolean(process.env.NEXTAUTH_URL),
+      has_NEXT_PUBLIC_WEBAPP_URL: Boolean(process.env.NEXT_PUBLIC_WEBAPP_URL),
+      has_STRIPE_SECRET_KEY: Boolean(process.env.STRIPE_SECRET_KEY),
+    },
+    "H2"
+  );
+  // #endregion
 
   // Get yarn and turbo versions
-  let yarnVersion = 'unknown';
-  let turboVersion = 'unknown';
+  let yarnVersion = "unknown";
+  let turboVersion = "unknown";
   try {
-    yarnVersion = execSync('yarn --version', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    yarnVersion = execSync("yarn --version", { encoding: "utf8", stdio: "pipe" }).trim();
   } catch (e) {
-    yarnVersion = 'error';
+    yarnVersion = "error";
   }
   try {
-    turboVersion = execSync('turbo --version', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    turboVersion = execSync("turbo --version", { encoding: "utf8", stdio: "pipe" }).trim();
   } catch (e) {
-    turboVersion = 'error';
+    turboVersion = "error";
   }
 
-  logJson('Tool versions', {
-    yarnVersion,
-    turboVersion,
-  }, 'D');
+  logJson(
+    "Tool versions",
+    {
+      yarnVersion,
+      turboVersion,
+    },
+    "D"
+  );
 
   // Log before turbo command
-  const buildCommand = 'turbo run build --filter=@calcom/web...';
-  logJson('Before turbo build', {
-    command: buildCommand,
-    workingDir: process.cwd(),
-    repoRoot: REPO_ROOT,
-  }, 'E');
+  const buildCommand = "turbo run build --filter=@calcom/web...";
+  logJson(
+    "Before turbo build",
+    {
+      command: buildCommand,
+      workingDir: process.cwd(),
+      repoRoot: REPO_ROOT,
+    },
+    "E"
+  );
+
+  turboStartTime = Date.now();
+  // #region agent log
+  logJson(
+    "Turbo build start",
+    {
+      command: buildCommand,
+      startTime: turboStartTime,
+    },
+    "H3"
+  );
+  // #endregion
 
   // Execute the actual build command
-  console.log('Executing:', buildCommand);
+  console.log("Executing:", buildCommand);
   execSync(buildCommand, {
-    stdio: 'inherit',
+    stdio: "inherit",
     cwd: REPO_ROOT,
   });
 
+  const turboDurationMs = turboStartTime ? Date.now() - turboStartTime : null;
+  // #region agent log
+  logJson(
+    "Turbo build end",
+    {
+      durationMs: turboDurationMs,
+      exitCode: 0,
+    },
+    "H3"
+  );
+  // #endregion
+
   // Log success
-  logJson('Build completed successfully', {
-    exitCode: 0,
-  }, 'F');
+  logJson(
+    "Build completed successfully",
+    {
+      exitCode: 0,
+    },
+    "F"
+  );
 
   process.exit(0);
 } catch (error) {
+  const turboDurationMs = turboStartTime ? Date.now() - turboStartTime : null;
   // Log failure
-  logJson('Build failed', {
-    exitCode: error.status || 1,
-    error: error.message,
-    stack: error.stack,
-  }, 'G');
+  logJson(
+    "Build failed",
+    {
+      exitCode: error.status || 1,
+      error: error.message,
+      stack: error.stack,
+      durationMs: turboDurationMs,
+    },
+    "G"
+  );
 
   process.exit(error.status || 1);
 }
