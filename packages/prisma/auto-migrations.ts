@@ -19,8 +19,10 @@ const exec: (
  */
 async function main(): Promise<void> {
   // Skip migrations in build environments (Vercel, CI) where database may not be available
-  if (process.env.VERCEL === "1" || process.env.CI === "true") {
+  // However, if RUN_MIGRATIONS_ON_VERCEL is set, we'll attempt to run migrations
+  if ((process.env.VERCEL === "1" || process.env.CI === "true") && process.env.RUN_MIGRATIONS_ON_VERCEL !== "1") {
     console.info("Build environment detected, skipping migrations");
+    console.info("To run migrations on Vercel, set RUN_MIGRATIONS_ON_VERCEL=1 and ensure DATABASE_DIRECT_URL is set");
     return;
   }
   if (process.env.SKIP_DB_MIGRATIONS === "1") {
