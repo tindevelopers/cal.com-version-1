@@ -1,5 +1,5 @@
 {
-  "buildCommand": "turbo run build --filter=@calcom/web...",
+  "buildCommand": "node scripts/vercel-build-with-logging.js",
   "installCommand": "yarn install",
   "framework": "nextjs",
   "crons": [

@@ -1,16 +1,16 @@
+import process from "node:process";
 import { withBotId } from "botid/next/config";
 import { config as dotenvConfig } from "dotenv";
 import type { NextConfig } from "next";
 import type { RouteHas } from "next/dist/lib/load-custom-routes";
 import { withAxiom } from "next-axiom";
-
 import i18nConfig from "./next-i18next.config";
 import packageJson from "./package.json";
 import {
   nextJsOrgRewriteConfig,
   orgUserRoutePath,
-  orgUserTypeRoutePath,
   orgUserTypeEmbedRoutePath,
+  orgUserTypeRoutePath,
 } from "./pagesAndRewritePaths";
 
 dotenvConfig({ path: "../../.env" });
@@ -207,6 +207,35 @@ const orgDomainMatcherConfig: {
 };
 
 const nextConfig = (phase: string): NextConfig => {
+  // #region agent log
+  try {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const logFile = path.join(__dirname, "../../../.cursor/debug.log");
+    const logEntry = {
+      sessionId: `next-config-${Date.now()}`,
+      runId: "next-config",
+      hypothesisId: "H",
+      location: "next.config.ts:209",
+      message: "Next.js config function called",
+      data: {
+        phase,
+        pwd: process.cwd(),
+        nodeEnv: process.env.NODE_ENV,
+        vercel: process.env.VERCEL,
+        vercelEnv: process.env.VERCEL_ENV,
+        buildStandalone: process.env.BUILD_STANDALONE,
+      },
+      timestamp: Date.now(),
+    };
+    if (fs.existsSync(path.dirname(logFile))) {
+      fs.appendFileSync(logFile, `${JSON.stringify(logEntry)}\n`);
+    }
+  } catch (_e) {
+    // Ignore logging errors
+  }
+  // #endregion
+
   if (isOrganizationsEnabled) {
     console.log(
       `[Phase: ${phase}] Adding rewrite config for organizations - orgHostPath: ${nextJsOrgRewriteConfig.orgHostPath}, orgSlug: ${nextJsOrgRewriteConfig.orgSlug}, disableRootPathRewrite: ${nextJsOrgRewriteConfig.disableRootPathRewrite}`
