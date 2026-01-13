@@ -332,7 +332,7 @@
     },
     "@calcom/web#build": {
       "dependsOn": ["^build", "copy-app-store-static"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", ".next/cache/**"],
       "inputs": [
         "app/**/*",
         "pages/**/*",
@@ -510,8 +510,15 @@
       "env": ["PRISMA_GENERATE_DATAPROXY"]
     },
     "@calcom/prisma#post-install": {
-      "cache": false,
-      "outputs": ["dist/**", "build/**"]
+      "cache": true,
+      "outputs": [
+        "generated/prisma/**",
+        "zod/**",
+        "../kysely/**",
+        "enums/**"
+      ],
+      "inputs": ["./schema.prisma", "package.json"],
+      "env": ["PRISMA_GENERATE_DATAPROXY"]
     },
     "start": {
       "outputs": ["dist/**", "build/**"]
@@ -553,8 +560,9 @@
       "outputs": ["dist/**", "build/**"]
     },
     "@calcom/embed-core#build": {
-      "cache": false,
+      "cache": true,
       "outputs": ["../../../apps/web/public/embed/**"],
+      "inputs": ["src/**/*", "package.json", "tsconfig.json", "vite.config.ts"],
       "env": [
         "EMBED_PUBLIC_VERCEL_URL",
         "EMBED_PUBLIC_WEBAPP_URL",
