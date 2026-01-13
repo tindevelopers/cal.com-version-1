@@ -21,7 +21,7 @@ export function Tooltip({
   defaultOpen?: boolean;
   side?: "top" | "right" | "bottom" | "left";
   onOpenChange?: (open: boolean) => void;
-} & TooltipPrimitive.TooltipContentProps): React.JSX.Element {
+} & TooltipPrimitive.TooltipContentProps): JSX.Element {
   const Content = (
     <TooltipPrimitive.Content
       {...props}

@@ -65,15 +65,16 @@ function attachPrismaDebugListeners(client: PrismaClient) {
 
   const slowMs = Number.isFinite(prismaSlowQueryMs) ? prismaSlowQueryMs : 200;
 
-  client.$on("query", (event) => {
+  // Type assertions needed for Prisma event listeners
+  client.$on("query" as never, (event: { duration: number; query: string }) => {
     if (event.duration < slowMs) return;
     // Avoid logging params (may contain secrets). Query text alone is usually enough to spot hangs.
     console.warn(`[prisma:query] ${event.duration}ms ${event.query.slice(0, 500)}`);
   });
-  client.$on("warn", (event) => {
+  client.$on("warn" as never, (event: { message: string }) => {
     console.warn("[prisma:warn]", event.message);
   });
-  client.$on("error", (event) => {
+  client.$on("error" as never, (event: { message: string }) => {
     console.error("[prisma:error]", event.message);
   });
 
