@@ -305,7 +305,8 @@
     "@calcom/web#copy-app-store-static": {
       "inputs": ["../../packages/app-store/**/static/**/*"],
       "outputLogs": "new-only",
-      "outputs": ["public/app-store/**"]
+      "outputs": ["public/app-store/**"],
+      "env": ["WEBAPP_URL"]
     },
     "@calcom/prisma#build": {
       "cache": false,
