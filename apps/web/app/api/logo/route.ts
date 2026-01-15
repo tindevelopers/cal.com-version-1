@@ -191,11 +191,18 @@ async function getHandler(request: NextRequest) {
     const logoDefinition = logoDefinitions[type];
     const filteredLogo = teamLogos[logoDefinition.source] ?? logoDefinition.fallback;
 
+    // Ensure WEBAPP_URL is defined and doesn't have trailing newlines
+    const webappUrl = (WEBAPP_URL || "").trim();
+    if (!webappUrl) {
+      log.error("WEBAPP_URL is not defined");
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    }
+
     try {
       let response: Response;
 
       // Internal URLs (fallbacks from WEBAPP_URL) are trusted
-      if (isTrustedInternalUrl(filteredLogo, WEBAPP_URL)) {
+      if (isTrustedInternalUrl(filteredLogo, webappUrl)) {
         response = await fetch(filteredLogo);
       }
       // External URLs (including data URLs) need SSRF validation
@@ -204,11 +211,27 @@ async function getHandler(request: NextRequest) {
         if (!validation.isValid) {
           logBlockedSSRFAttempt(filteredLogo, validation.error || "Unknown", { subdomain });
           // Graceful degradation: use default logo instead of error
-          response = await fetch(logoDefinition.fallback);
+          const fallbackUrl = logoDefinition.fallback.trim();
+          if (!fallbackUrl) {
+            log.error("Fallback logo URL is empty", { type, logoDefinition });
+            return NextResponse.json({ error: "Logo not available" }, { status: 404 });
+          }
+          response = await fetch(fallbackUrl);
         } else {
           response = await fetch(filteredLogo, {
             signal: AbortSignal.timeout(10000), // 10s conservative timeout
           });
+        }
+      }
+
+      if (!response.ok) {
+        log.error("Failed to fetch logo", { url: filteredLogo, status: response.status });
+        // Try fallback
+        const fallbackUrl = logoDefinition.fallback.trim();
+        if (fallbackUrl && fallbackUrl !== filteredLogo) {
+          response = await fetch(fallbackUrl);
+        } else {
+          return NextResponse.json({ error: "Failed to fetch logo" }, { status: response.status });
         }
       }
 
