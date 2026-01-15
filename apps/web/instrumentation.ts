@@ -60,9 +60,9 @@ export async function register(): Promise<void> {
 }
 
 export const onRequestError: Instrumentation.onRequestError = (
-  err: unknown,
-  request: Request,
-  context: { [key: string]: unknown }
+  err,
+  request,
+  context
 ) => {
   if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
     Sentry.captureRequestError(err, request, context);
