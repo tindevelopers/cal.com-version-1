@@ -80,30 +80,54 @@ export const metadata = {
 };
 
 const getInitialProps = async () => {
-  const h = await headers();
-  const isEmbed = h.get("x-isEmbed") === "true";
-  const embedColorScheme = h.get("x-embedColorScheme");
-  const newLocale = (await getLocale(buildLegacyRequest(await headers(), await cookies()))) ?? "en";
-  const direction = dir(newLocale) ?? "ltr";
+  try {
+    const h = await headers();
+    const isEmbed = h.get("x-isEmbed") === "true";
+    const embedColorScheme = h.get("x-embedColorScheme");
+    let newLocale = "en";
+    try {
+      newLocale = (await getLocale(buildLegacyRequest(await headers(), await cookies()))) ?? "en";
+    } catch (error) {
+      // Fallback to default locale if getLocale fails (e.g., database connection issues)
+      console.error("Failed to get locale, using default:", error);
+    }
+    const direction = dir(newLocale) ?? "ltr";
 
-  return {
-    isEmbed,
-    embedColorScheme,
-    locale: newLocale,
-    direction,
-  };
+    return {
+      isEmbed,
+      embedColorScheme,
+      locale: newLocale,
+      direction,
+    };
+  } catch (error) {
+    // Fallback to safe defaults if anything fails
+    console.error("Error in getInitialProps:", error);
+    return {
+      isEmbed: false,
+      embedColorScheme: null,
+      locale: "en",
+      direction: "ltr",
+    };
+  }
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const h = await headers();
-  const nonce = h.get("x-csp-nonce") ?? "";
+  try {
+    const h = await headers();
+    const nonce = h.get("x-csp-nonce") ?? "";
 
-  const country = h.get("cf-ipcountry") || h.get("x-vercel-ip-country") || "Unknown";
+    const country = h.get("cf-ipcountry") || h.get("x-vercel-ip-country") || "Unknown";
 
-  const { locale, direction, isEmbed, embedColorScheme } = await getInitialProps();
+    const { locale, direction, isEmbed, embedColorScheme } = await getInitialProps();
 
-  const ns = "common";
-  const translations = await loadTranslations(locale, ns);
+    const ns = "common";
+    let translations;
+    try {
+      translations = await loadTranslations(locale, ns);
+    } catch (error) {
+      console.error("Failed to load translations, using empty object:", error);
+      translations = {};
+    }
 
   return (
     <html
@@ -240,4 +264,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </body>
     </html>
   );
+  } catch (error) {
+    // Fallback to minimal layout if anything fails
+    console.error("Error in RootLayout:", error);
+    return (
+      <html lang="en">
+        <head>
+          <title>Error</title>
+        </head>
+        <body>
+          <div style={{ padding: "20px", fontFamily: "sans-serif" }}>
+            <h1>500 - Internal Server Error</h1>
+            <p>Something went wrong. Please try again later.</p>
+          </div>
+        </body>
+      </html>
+    );
+  }
 }

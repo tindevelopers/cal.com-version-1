@@ -165,80 +165,86 @@ async function getTeamLogos(subdomain: string, isValidOrgDomain: boolean) {
  * This API endpoint is used to serve the logo associated with a team if no logo is found we serve our default logo
  */
 async function getHandler(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const parsedQuery = logoApiSchema.parse(Object.fromEntries(searchParams.entries()));
-
-  // Create a legacy request object for compatibility
-  const legacyReq = buildLegacyRequest(await headers(), await cookies());
-  const { isValidOrgDomain } = orgDomainConfig(legacyReq);
-
-  const hostname = request.headers.get("host");
-  if (!hostname) {
-    return NextResponse.json({ error: "No hostname" }, { status: 400 });
-  }
-
-  const domains = extractSubdomainAndDomain(hostname);
-  if (!domains) {
-    return NextResponse.json({ error: "No domains" }, { status: 400 });
-  }
-
-  const [subdomain] = domains;
-  const teamLogos = await getTeamLogos(subdomain, isValidOrgDomain);
-
-  // Resolve all icon types to team logos, falling back to Cal.com defaults.
-  const type: LogoType = parsedQuery?.type && isValidLogoType(parsedQuery.type) ? parsedQuery.type : "logo";
-  const logoDefinition = logoDefinitions[type];
-  const filteredLogo = teamLogos[logoDefinition.source] ?? logoDefinition.fallback;
-
   try {
-    let response: Response;
+    const searchParams = request.nextUrl.searchParams;
+    const parsedQuery = logoApiSchema.parse(Object.fromEntries(searchParams.entries()));
 
-    // Internal URLs (fallbacks from WEBAPP_URL) are trusted
-    if (isTrustedInternalUrl(filteredLogo, WEBAPP_URL)) {
-      response = await fetch(filteredLogo);
+    // Create a legacy request object for compatibility
+    const legacyReq = buildLegacyRequest(await headers(), await cookies());
+    const { isValidOrgDomain } = orgDomainConfig(legacyReq);
+
+    const hostname = request.headers.get("host");
+    if (!hostname) {
+      return NextResponse.json({ error: "No hostname" }, { status: 400 });
     }
-    // External URLs (including data URLs) need SSRF validation
-    else {
-      const validation = await validateUrlForSSRF(filteredLogo);
-      if (!validation.isValid) {
-        logBlockedSSRFAttempt(filteredLogo, validation.error || "Unknown", { subdomain });
-        // Graceful degradation: use default logo instead of error
-        response = await fetch(logoDefinition.fallback);
-      } else {
-        response = await fetch(filteredLogo, {
-          signal: AbortSignal.timeout(10000), // 10s conservative timeout
-        });
+
+    const domains = extractSubdomainAndDomain(hostname);
+    if (!domains) {
+      return NextResponse.json({ error: "No domains" }, { status: 400 });
+    }
+
+    const [subdomain] = domains;
+    const teamLogos = await getTeamLogos(subdomain, isValidOrgDomain);
+
+    // Resolve all icon types to team logos, falling back to Cal.com defaults.
+    const type: LogoType = parsedQuery?.type && isValidLogoType(parsedQuery.type) ? parsedQuery.type : "logo";
+    const logoDefinition = logoDefinitions[type];
+    const filteredLogo = teamLogos[logoDefinition.source] ?? logoDefinition.fallback;
+
+    try {
+      let response: Response;
+
+      // Internal URLs (fallbacks from WEBAPP_URL) are trusted
+      if (isTrustedInternalUrl(filteredLogo, WEBAPP_URL)) {
+        response = await fetch(filteredLogo);
       }
+      // External URLs (including data URLs) need SSRF validation
+      else {
+        const validation = await validateUrlForSSRF(filteredLogo);
+        if (!validation.isValid) {
+          logBlockedSSRFAttempt(filteredLogo, validation.error || "Unknown", { subdomain });
+          // Graceful degradation: use default logo instead of error
+          response = await fetch(logoDefinition.fallback);
+        } else {
+          response = await fetch(filteredLogo, {
+            signal: AbortSignal.timeout(10000), // 10s conservative timeout
+          });
+        }
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      let buffer: Buffer = Buffer.from(arrayBuffer);
+      let contentType = response.headers.get("content-type") || "image/png";
+
+      // Resize the team logos if needed
+      if (teamLogos[logoDefinition.source] && logoDefinition.w) {
+        const { resizeImage } = await import("@calcom/lib/server/imageUtils");
+        const { buffer: outBuffer, contentType: outContentType } = await resizeImage({
+          buffer,
+          width: logoDefinition.w,
+          height: logoDefinition.h,
+          quality: 100,
+          contentType,
+        });
+        buffer = outBuffer;
+        contentType = outContentType;
+      }
+
+      // Create a new response with the image buffer
+      const imageResponse = new NextResponse(buffer as BodyInit);
+
+      // Set the appropriate headers
+      imageResponse.headers.set("Content-Type", contentType);
+      imageResponse.headers.set("Cache-Control", "s-maxage=86400, stale-while-revalidate=60");
+
+      return imageResponse;
+    } catch (error) {
+      log.error("Error fetching logo", { error });
+      return NextResponse.json({ error: "Failed fetching logo" }, { status: 404 });
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    let buffer: Buffer = Buffer.from(arrayBuffer);
-    let contentType = response.headers.get("content-type") || "image/png";
-
-    // Resize the team logos if needed
-    if (teamLogos[logoDefinition.source] && logoDefinition.w) {
-      const { resizeImage } = await import("@calcom/lib/server/imageUtils");
-      const { buffer: outBuffer, contentType: outContentType } = await resizeImage({
-        buffer,
-        width: logoDefinition.w,
-        height: logoDefinition.h,
-        quality: 100,
-        contentType,
-      });
-      buffer = outBuffer;
-      contentType = outContentType;
-    }
-
-    // Create a new response with the image buffer
-    const imageResponse = new NextResponse(buffer as BodyInit);
-
-    // Set the appropriate headers
-    imageResponse.headers.set("Content-Type", contentType);
-    imageResponse.headers.set("Cache-Control", "s-maxage=86400, stale-while-revalidate=60");
-
-    return imageResponse;
   } catch (error) {
-    return NextResponse.json({ error: "Failed fetching logo" }, { status: 404 });
+    log.error("Error in logo handler", { error });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
