@@ -293,7 +293,15 @@ const nextConfig = (phase: string): NextConfig => {
     // Force webpack usage in production to prevent Turbopack hangs
     // Next.js 16.1.0 may use Turbopack by default, but webpack is more stable
     // biome-ignore lint/suspicious/noExplicitAny: webpack config types are complex and not easily typed
-    webpack: (config: any, { webpack }: { webpack: any }) => {
+    // biome-ignore lint/nursery/useExplicitType: webpack types are complex
+    webpack: (config: any, { webpack, isServer }: { webpack: any; isServer: boolean }) => {
+      // Log webpack compilation start
+      const buildStartTime = Date.now();
+      const buildType = isServer ? "server" : "client";
+      console.log(
+        `[Webpack] Starting ${buildType} compilation at ${new Date().toISOString()}`
+      );
+
       // Handle node: URI scheme imports (Next.js 16 uses node:process, etc.)
       // Use NormalModuleReplacementPlugin to replace node: imports with regular imports
       config.plugins?.push(
@@ -301,6 +309,51 @@ const nextConfig = (phase: string): NextConfig => {
           resource.request = resource.request.replace(/^node:/, "");
         })
       );
+
+      // Add compilation hooks for instrumentation
+      if (config.plugins) {
+        // Track compilation progress
+        // biome-ignore lint/suspicious/noExplicitAny: webpack compiler types are complex
+        config.plugins.push({
+          apply: (compiler: any) => {
+            compiler.hooks.compile.tap("BuildInstrumentation", () => {
+              console.log(
+                `[Webpack] Compilation started for ${buildType} at ${new Date().toISOString()}`
+              );
+            });
+
+            // biome-ignore lint/suspicious/noExplicitAny: webpack compilation types are complex
+            compiler.hooks.compilation.tap("BuildInstrumentation", (compilation: any) => {
+              // biome-ignore lint/suspicious/noExplicitAny: webpack module types are complex
+              compilation.hooks.buildModule.tap("BuildInstrumentation", (_module: any) => {
+                // Log every 1000 modules to avoid spam
+                if (compilation.modules.size % 1000 === 0) {
+                  console.log(
+                    `[Webpack] Processing module ${compilation.modules.size} for ${buildType}...`
+                  );
+                }
+              });
+            });
+
+            // biome-ignore lint/suspicious/noExplicitAny: webpack stats types are complex
+            compiler.hooks.done.tap("BuildInstrumentation", (stats: any) => {
+              const duration = Date.now() - buildStartTime;
+              const errors = stats.compilation?.errors?.length || 0;
+              const warnings = stats.compilation?.warnings?.length || 0;
+              const buildTypeCapitalized = isServer ? "Server" : "Client";
+              console.log(
+                `[Webpack] ${buildTypeCapitalized} compilation completed in ${duration}ms - Errors: ${errors}, Warnings: ${warnings}`
+              );
+            });
+
+            compiler.hooks.failed.tap("BuildInstrumentation", (error: Error) => {
+              const buildTypeCapitalized = isServer ? "Server" : "Client";
+              console.error(`[Webpack] ${buildTypeCapitalized} compilation failed:`, error.message);
+            });
+          },
+        });
+      }
+
       return config;
     },
     async rewrites() {

@@ -240,6 +240,52 @@ try {
   );
   // #endregion
 
+  // Check critical environment variables before build
+  const criticalEnvVars = [
+    "DATABASE_URL",
+    "DATABASE_DIRECT_URL",
+    "NEXT_PUBLIC_WEBAPP_URL",
+    "WEBAPP_URL",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "CALENDSO_ENCRYPTION_KEY",
+  ];
+  
+  logJson(
+    "Environment variable validation",
+    {
+      vars: criticalEnvVars.map((key) => {
+        const value = process.env[key];
+        const hasValue = Boolean(value);
+        const hasTrailingSpace = value?.endsWith(" ") || value?.endsWith("\t");
+        const hasLeadingSpace = value?.startsWith(" ") || value?.startsWith("\t");
+        const length = value?.length || 0;
+        const hasNewlineInMiddle = value?.includes("\n") && !value?.endsWith("\n");
+        return {
+          key,
+          hasValue,
+          hasTrailingSpace,
+          hasLeadingSpace,
+          hasNewlineInMiddle,
+          length,
+          firstChar: value?.[0] || "none",
+          lastChar: value?.[length - 1] || "none",
+        };
+      }),
+    },
+    "H9"
+  );
+  
+  // Run validation script (non-blocking, just logs warnings)
+  try {
+    const { execSync } = await import("node:child_process");
+    execSync("node scripts/validate-env-vars.mjs", { stdio: "pipe", cwd: REPO_ROOT });
+  } catch (e) {
+    // Validation script exits with code 1 if issues found, but we continue anyway
+    // The validation is logged above, so we don't need to fail the build here
+    console.warn("Environment variable validation found issues (see logs above)");
+  }
+
   // Execute the actual build command with output capture and heartbeat
   console.log("Executing:", buildCommand);
   
@@ -249,6 +295,8 @@ try {
   const STUCK_THRESHOLD_MS = 300000; // 5 minutes
   let outputBuffer = "";
   let lastOutputLine = "";
+  let nextJsPhase = "unknown";
+  let webpackPhase = "unknown";
   
   await new Promise((resolve, reject) => {
     const child = spawn(buildCommand, {
@@ -270,6 +318,8 @@ try {
           timeSinceLastOutputMs: timeSinceLastOutput,
           lastOutputLine: lastOutputLine.substring(0, 200), // Truncate long lines
           isStuck: timeSinceLastOutput > STUCK_THRESHOLD_MS,
+          nextJsPhase,
+          webpackPhase,
         },
         "H4"
       );
@@ -309,6 +359,31 @@ try {
         lastOutputLine = lines[lines.length - 1];
       }
       
+      // Track Next.js build phases
+      const outputLower = output.toLowerCase();
+      if (outputLower.includes("creating an optimized production build")) {
+        nextJsPhase = "creating-build";
+        logJson("Next.js phase: Creating optimized production build", {}, "H10");
+      } else if (outputLower.includes("compiling")) {
+        nextJsPhase = "compiling";
+        logJson("Next.js phase: Compiling", {}, "H10");
+      } else if (outputLower.includes("collecting page data")) {
+        nextJsPhase = "collecting-page-data";
+        logJson("Next.js phase: Collecting page data", {}, "H10");
+      } else if (outputLower.includes("generating static pages")) {
+        nextJsPhase = "generating-static-pages";
+        logJson("Next.js phase: Generating static pages", {}, "H10");
+      } else if (outputLower.includes("finalizing page optimization")) {
+        nextJsPhase = "finalizing";
+        logJson("Next.js phase: Finalizing page optimization", {}, "H10");
+      } else if (outputLower.includes("running typescript")) {
+        nextJsPhase = "type-checking";
+        logJson("Next.js phase: Running TypeScript", {}, "H10");
+      } else if (outputLower.includes("webpack")) {
+        webpackPhase = "webpack-compilation";
+        logJson("Webpack phase detected", {}, "H10");
+      }
+      
       // Log every 100 lines or every 2 minutes
       const linesCount = outputBuffer.split("\n").length;
       if (linesCount % 100 === 0 || Date.now() - lastHeartbeatTime > 120000) {
@@ -318,6 +393,8 @@ try {
             totalLines: linesCount,
             lastOutputLine: lastOutputLine.substring(0, 200),
             timeSinceStartMs: Date.now() - turboStartTime,
+            nextJsPhase,
+            webpackPhase,
           },
           "H6"
         );
