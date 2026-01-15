@@ -952,3 +952,5 @@ Cal.com is an [open startup](https://cal.com/open) and [Jitsu](https://github.co
 ## Deployment
 
 This repository is configured for automatic deployment to Vercel on pushes to the main branch.
+
+**Latest updates:** Added comprehensive build instrumentation, fixed environment variable handling (removed trailing newlines), and improved webpack compilation tracking.
