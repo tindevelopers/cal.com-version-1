@@ -98,11 +98,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { promisify } = await import("node:util");
     const execAsync = promisify(exec);
 
+    // Convert all environment variables to strings for execAsync
+    // PAYMENT_FEE_PERCENTAGE is typed as number but needs to be a string for ProcessEnv
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      env[key] = value !== undefined ? String(value) : "";
+    }
+    // Override DATABASE_URL with DATABASE_DIRECT_URL if available
+    env.DATABASE_URL = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL || "";
+
     const { stdout, stderr } = await execAsync("yarn workspace @calcom/prisma db-deploy", {
-      env: {
-        ...process.env,
-        DATABASE_URL: process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL,
-      },
+      env,
       cwd: process.cwd(),
     });
 
