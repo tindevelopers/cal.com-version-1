@@ -274,6 +274,8 @@
     "NEXT_PUBLIC_API_V2_URL",
     "NEXT_PUBLIC_WEBAPP_URL",
     "NEXT_PUBLIC_WEBSITE_URL",
+    "RUN_MIGRATIONS_ON_VERCEL",
+    "WEBAPP_URL",
     "BUILD_STANDALONE",
     "ATOMS_E2E_APPLE_ID",
     "ATOMS_E2E_APPLE_CONNECT_APP_SPECIFIC_PASSCODE",
@@ -553,7 +555,12 @@
         "../../packages/app-store/**/pages/**",
         "../../packages/app-store-cli/src/**"
       ],
-      "outputs": ["../../packages/app-store/*.generated.ts", "../../packages/app-store/*.generated.tsx"]
+      "outputs": ["../../packages/app-store/*.generated.ts", "../../packages/app-store/*.generated.tsx"],
+      "env": ["RUN_MIGRATIONS_ON_VERCEL", "WEBAPP_URL"]
+    },
+    "@calcom/ui#build": {
+      "inputs": ["svg-icons/**/*.svg", "scripts/**/*.mjs"],
+      "outputs": ["components/icon/icon-names.ts", "../../apps/web/public/icons/sprite.svg"]
     },
     "@calcom/embed-react#type-check": {
       "dependsOn": ["@calcom/embed-core#build", "@calcom/embed-snippet#build"],
