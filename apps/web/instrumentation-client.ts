@@ -69,7 +69,7 @@ if (process.env.NODE_ENV === "production") {
 
     // Setting this option to true will print useful information to the console while you're setting up Sentry.
     debug: !!process.env.SENTRY_DEBUG,
-    beforeSend(event): Sentry.Event | null {
+    beforeSend(event, hint) {
       if (
         event.exception?.values?.some(
           (e) =>
