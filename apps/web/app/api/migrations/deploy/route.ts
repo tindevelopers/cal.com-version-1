@@ -100,15 +100,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Convert all environment variables to strings for execAsync
     // PAYMENT_FEE_PERCENTAGE is typed as number but needs to be a string for ProcessEnv
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      env[key] = value !== undefined ? String(value) : "";
+    // Also trim any trailing newlines/whitespace that might cause issues
+    // biome-ignore lint/suspicious/noExplicitAny: process.env can contain non-string values
+    const env: { [key: string]: string } = {};
+    for (const key in process.env) {
+      if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+        const value = process.env[key];
+        if (value !== undefined) {
+          // Trim trailing newlines and whitespace that might cause issues
+          env[key] = String(value).trimEnd();
+        }
+      }
     }
     // Override DATABASE_URL with DATABASE_DIRECT_URL if available
-    env.DATABASE_URL = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL || "";
+    const databaseUrl = process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL;
+    if (databaseUrl) {
+      env.DATABASE_URL = String(databaseUrl).trimEnd();
+    }
 
     const { stdout, stderr } = await execAsync("yarn workspace @calcom/prisma db-deploy", {
-      env,
+      env: env as NodeJS.ProcessEnv,
       cwd: process.cwd(),
     });
 
