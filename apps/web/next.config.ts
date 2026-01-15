@@ -292,8 +292,15 @@ const nextConfig = (phase: string): NextConfig => {
     ...(process.env.NODE_ENV === "development" && process.env.USE_TURBOPACK === "1" ? { turbopack: {} } : {}),
     // Force webpack usage in production to prevent Turbopack hangs
     // Next.js 16.1.0 may use Turbopack by default, but webpack is more stable
-    webpack: (config) => {
-      // Ensure webpack is used instead of Turbopack
+    // biome-ignore lint/suspicious/noExplicitAny: webpack config types are complex and not easily typed
+    webpack: (config: any, { webpack }: { webpack: any }) => {
+      // Handle node: URI scheme imports (Next.js 16 uses node:process, etc.)
+      // Use NormalModuleReplacementPlugin to replace node: imports with regular imports
+      config.plugins?.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource: { request: string }) => {
+          resource.request = resource.request.replace(/^node:/, "");
+        })
+      );
       return config;
     },
     async rewrites() {
