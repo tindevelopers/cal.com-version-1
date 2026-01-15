@@ -445,10 +445,8 @@ const nextConfig = (phase: string): NextConfig => {
           source: "/team/:teamname/avatar.png",
           destination: "/api/user/avatar?teamname=:teamname",
         },
-        {
-          source: "/icons/sprite.svg",
-          destination: `${process.env.NEXT_PUBLIC_WEBAPP_URL}/icons/sprite.svg`,
-        },
+        // Removed sprite.svg rewrite - it was causing CORS issues by redirecting to external URL
+        // IconSprites component already uses NEXT_PUBLIC_WEBAPP_URL directly
         {
           source: "/_proxy/dub/track/:path",
           destination: "https://api.dub.co/track/:path",
