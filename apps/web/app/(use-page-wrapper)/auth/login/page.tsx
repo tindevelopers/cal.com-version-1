@@ -11,13 +11,22 @@ import type { PageProps as ClientPageProps } from "~/auth/login-view";
 import Login from "~/auth/login-view";
 
 export const generateMetadata = async () => {
-  return await _generateMetadata(
-    (t) => t("login"),
-    (t) => t("login"),
-    undefined,
-    undefined,
-    "/auth/login"
-  );
+  try {
+    return await _generateMetadata(
+      (t) => t("login"),
+      (t) => t("login"),
+      undefined,
+      undefined,
+      "/auth/login"
+    );
+  } catch (error) {
+    // Fallback metadata if generation fails
+    console.error("Error generating metadata for login page:", error);
+    return {
+      title: "Login",
+      description: "Login to your account",
+    };
+  }
 };
 
 const getData = withAppDirSsr<ClientPageProps>(getServerSideProps);
