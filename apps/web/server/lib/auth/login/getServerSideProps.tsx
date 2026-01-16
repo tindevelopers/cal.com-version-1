@@ -75,8 +75,20 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     };
   }
 
-  const userExists = await prisma.user.findFirst({ select: { id: true } });
-  if (!userExists) {
+  // Check if database is available and user exists
+  let userExists = null;
+  try {
+    userExists = await prisma.user.findFirst({ select: { id: true } });
+  } catch (error) {
+    // Database connection error - log but don't fail the page
+    console.error("Database connection error in login getServerSideProps:", error);
+    // Continue without redirect - page will still render but may show errors
+  }
+  
+  if (userExists === null) {
+    // Database unavailable - still render login page but log the issue
+    console.warn("Database unavailable, proceeding with login page render");
+  } else if (!userExists) {
     // Proceed to new onboarding to create first admin user
     return {
       redirect: {

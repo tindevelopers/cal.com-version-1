@@ -23,10 +23,26 @@ export const generateMetadata = async () => {
 const getData = withAppDirSsr<ClientPageProps>(getServerSideProps);
 
 const ServerPage = async ({ params, searchParams }: ServerPageProps) => {
-  const props = await getData(
-    buildLegacyCtx(await headers(), await cookies(), await params, await searchParams)
-  );
-  return <Login {...props} />;
+  try {
+    const props = await getData(
+      buildLegacyCtx(await headers(), await cookies(), await params, await searchParams)
+    );
+    return <Login {...props} />;
+  } catch (error) {
+    // Log the error for debugging
+    console.error("Error in login ServerPage:", error);
+    // Return login page with minimal props to prevent complete failure
+    return (
+      <Login
+        csrfToken={undefined}
+        isGoogleLoginEnabled={false}
+        isSAMLLoginEnabled={false}
+        samlTenantID={undefined}
+        samlProductID={undefined}
+        totpEmail={null}
+      />
+    );
+  }
 };
 
 export default ServerPage;
