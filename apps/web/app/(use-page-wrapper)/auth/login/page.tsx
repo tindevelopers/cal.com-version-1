@@ -41,13 +41,14 @@ const ServerPage = async ({ params, searchParams }: ServerPageProps) => {
     // Log the error for debugging
     console.error("Error in login ServerPage:", error);
     // Return login page with minimal props to prevent complete failure
+    // Use default values that match the expected types
     return (
       <Login
         csrfToken={undefined}
         isGoogleLoginEnabled={false}
         isSAMLLoginEnabled={false}
-        samlTenantID={undefined}
-        samlProductID={undefined}
+        samlTenantID="Cal.com"
+        samlProductID="Cal.com"
         totpEmail={null}
       />
     );
